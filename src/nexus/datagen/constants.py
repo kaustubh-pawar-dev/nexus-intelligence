@@ -123,3 +123,63 @@ ACQUISITION_CHANNELS = (
 CHANNEL_PROBS = (0.28, 0.22, 0.15, 0.10, 0.12, 0.13)
 
 MARKETING_OPT_IN_RATE = 0.62
+
+# ---------------------------------------------------------------------------
+# Orders and order lines (SYNTHETIC)
+# ---------------------------------------------------------------------------
+STREAM_ORDERS = 4
+STREAM_ORDER_ITEMS = 5
+
+# Average orders per active customer per month, before channel, opt-in and noise.
+SEGMENT_MONTHLY_ORDER_RATE = {"Consumer": 0.18, "Small Business": 0.45, "Enterprise": 1.20}
+CHANNEL_RATE_MULTIPLIER = {
+    "Organic Search": 1.00,
+    "Paid Search": 0.90,
+    "Social Media": 0.85,
+    "Email": 1.10,
+    "Referral": 1.15,
+    "Direct": 1.05,
+}
+OPT_IN_RATE_MULTIPLIER = 1.10
+# Per-customer rate noise: gamma with mean 1 (some customers are much more active).
+CUSTOMER_RATE_GAMMA_SHAPE = 2.0
+
+# A customer stops ordering after an exponential lifetime counted from signup.
+SEGMENT_MEAN_LIFETIME_DAYS = {"Consumer": 540, "Small Business": 800, "Enterprise": 1200}
+CHANNEL_LIFETIME_MULTIPLIER = {
+    "Organic Search": 1.00,
+    "Paid Search": 0.80,
+    "Social Media": 0.75,
+    "Email": 1.10,
+    "Referral": 1.25,
+    "Direct": 1.00,
+}
+
+# Seasonality: index 0 = January. Weekday factors: index 0 = Monday.
+MONTH_SEASONALITY = (0.90, 0.85, 0.95, 0.95, 1.00, 0.95, 0.95, 1.00, 1.00, 1.10, 1.35, 1.30)
+WEEKDAY_FACTOR = (1.00, 1.00, 1.00, 1.00, 1.05, 1.15, 1.10)
+
+SALES_CHANNELS = ("Web", "Mobile App", "Marketplace")
+SALES_CHANNEL_PROBS = (0.55, 0.35, 0.10)
+
+ORDER_STATUSES = ("Completed", "Cancelled")
+ORDER_CANCEL_RATE = 0.04
+
+DISCOUNT_LEVELS = (0.05, 0.10, 0.15, 0.20)
+DISCOUNT_PROBS = (0.40, 0.30, 0.20, 0.10)
+DISCOUNT_PROB_BASE = 0.20
+DISCOUNT_PROB_NOVEMBER = 0.45
+
+# Lines per order = base + Poisson(extra mean), capped.
+SEGMENT_ITEMS_BASE = {"Consumer": 1, "Small Business": 1, "Enterprise": 2}
+SEGMENT_ITEMS_EXTRA_MEAN = {"Consumer": 0.6, "Small Business": 1.2, "Enterprise": 2.0}
+MAX_ITEMS_PER_ORDER = 8
+
+# Quantity per line = base + Poisson(extra mean), capped.
+SEGMENT_QTY_BASE = {"Consumer": 1, "Small Business": 1, "Enterprise": 2}
+SEGMENT_QTY_EXTRA_MEAN = {"Consumer": 0.4, "Small Business": 1.5, "Enterprise": 4.0}
+MAX_QUANTITY = 20
+
+PRODUCT_POPULARITY_SIGMA = 0.8
+# Inactive products are not sold in the last N days of the window.
+INACTIVE_PRODUCT_CUTOFF_DAYS = 180
