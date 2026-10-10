@@ -239,9 +239,6 @@ REFUND_REASONS = (DEFECTIVE_REASON, *OTHER_REFUND_REASONS)
 # ---------------------------------------------------------------------------
 STREAM_PURCHASE_ORDERS = 8
 
-# Quantity ordered = max(MIN_PO_QTY, ceil(next month's units * buffer * lognormal noise)).
-PO_QTY_BUFFER = 1.10
-PO_QTY_NOISE_SIGMA = 0.20
 MIN_PO_QTY = 5
 
 # Orders placed in these months face congestion: on-time probability drops for all suppliers.
@@ -259,3 +256,17 @@ SHORT_SHIPMENT_PROB = 0.05
 SHORT_SHIPMENT_RANGE = (0.05, 0.30)
 
 DELIVERY_STATUSES = ("Delivered", "In Transit")
+
+
+# ---------------------------------------------------------------------------
+# Stock-aware replenishment (SYNTHETIC)
+# ---------------------------------------------------------------------------
+# Each purchase order tops the inventory position up to
+#   demand over (planned lead time + PO_REVIEW_DAYS) * PO_SAFETY_BUFFER * forecast noise.
+PO_REVIEW_DAYS = 45
+PO_SAFETY_BUFFER = 1.15
+PO_FORECAST_NOISE_SIGMA = 0.10
+
+# Each product starts with stock on its first listed day (window start for older products).
+INITIAL_STOCK_COVER_DAYS = 45
+INITIAL_STOCK_BUFFER = 1.25

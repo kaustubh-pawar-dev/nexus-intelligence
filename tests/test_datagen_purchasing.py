@@ -4,10 +4,16 @@ import pytest
 from nexus.datagen.constants import DATA_END, DATA_START, MIN_PO_QTY, N_PRODUCTS
 from nexus.datagen.customers import generate_customers
 from nexus.datagen.orders import generate_order_items, generate_orders
-from nexus.datagen.purchasing import generate_purchase_orders, validate_purchase_orders
+from nexus.datagen.purchasing import (
+    daily_units_sold,
+    generate_purchase_orders,
+    initial_stock,
+    validate_purchase_orders,
+)
 from nexus.datagen.reference import generate_products, generate_suppliers
 
 SEED = 42
+N_DAYS = (DATA_END - DATA_START).days + 1
 
 
 @pytest.fixture(scope="module")
@@ -49,7 +55,7 @@ def _delivered_before_2025(po):
 
 def test_po_shape_and_ids(purchase_orders):
     assert purchase_orders.shape[1] == 12
-    assert 2_500 < len(purchase_orders) <= N_PRODUCTS * 36
+    assert 2_000 < len(purchase_orders) <= N_PRODUCTS * 36
     assert purchase_orders["po_id"].is_unique
     assert purchase_orders["po_id"].iloc[0] == "PO-000001"
     assert purchase_orders["po_id"].iloc[-1] == f"PO-{len(purchase_orders):06d}"
@@ -78,7 +84,7 @@ def test_delivered_and_in_transit_fields(purchase_orders):
     delivered = po["delivery_status"] == "Delivered"
     d, t = po[delivered], po[~delivered]
     assert len(t) > 0
-    assert 0.003 < len(t) / len(po) < 0.04
+    assert 0.001 < len(t) / len(po) < 0.04
     assert d["actual_delivery_date"].notna().all()
     assert (d["actual_delivery_date"] <= pd.Timestamp(DATA_END)).all()
     assert (d["actual_delivery_date"] > d["order_date"]).all()
@@ -93,7 +99,7 @@ def test_ordered_quantity_tracks_demand(purchase_orders, orders, order_items):
     completed = orders.loc[orders["order_status"] == "Completed", "order_id"]
     sold = order_items.loc[order_items["order_id"].isin(completed), "quantity"].sum()
     ratio = purchase_orders["quantity_ordered"].sum() / sold
-    assert 0.95 < ratio < 1.40
+    assert 0.90 < ratio < 1.25
     assert (purchase_orders["quantity_ordered"] >= MIN_PO_QTY).all()
 
 
@@ -134,7 +140,7 @@ def test_defective_units_track_supplier_defect_rate(purchase_orders, suppliers):
 def test_short_shipment_share(purchase_orders):
     d = purchase_orders[purchase_orders["delivery_status"] == "Delivered"]
     short = (d["quantity_received"].astype("int64") < d["quantity_ordered"]).mean()
-    assert 0.025 < short < 0.08
+    assert 0.02 < short < 0.08
 
 
 def test_generation_is_deterministic(products, suppliers, orders, order_items):
@@ -181,3 +187,32 @@ def test_validation_detects_broken_quantities_and_transit(purchase_orders, produ
     duplicated = pd.concat([po, po.iloc[[0]]], ignore_index=True)
     problems = validate_purchase_orders(duplicated, products, suppliers)
     assert any("po_id is not unique" in p for p in problems)
+
+
+def test_daily_units_sold_matches_completed_lines(products, orders, order_items):
+    sales = daily_units_sold(orders, order_items, products)
+    completed = orders.loc[orders["order_status"] == "Completed", "order_id"]
+    expected = order_items.loc[order_items["order_id"].isin(completed), "quantity"].sum()
+    assert sales.shape == (N_PRODUCTS, N_DAYS)
+    assert sales.sum() == expected
+    assert (sales >= 0).all()
+
+
+def test_initial_stock_rules(products, orders, order_items):
+    sales = daily_units_sold(orders, order_items, products)
+    start_idx, qty = initial_stock(sales, products)
+    launch = (products["launch_date"] - pd.Timestamp(DATA_START)).dt.days.to_numpy()
+    assert (start_idx == launch.clip(0, N_DAYS - 1)).all()
+    assert (qty >= MIN_PO_QTY).all()
+    assert len(qty) == N_PRODUCTS
+
+
+def test_inventory_position_stays_bounded(purchase_orders, products, orders, order_items):
+    """Stock-aware ordering must not let stock pile up (or collapse) over the window."""
+    sales = daily_units_sold(orders, order_items, products)
+    _, init_qty = initial_stock(sales, products)
+    delivered = purchase_orders[purchase_orders["delivery_status"] == "Delivered"]
+    received = delivered["quantity_received"].astype("int64").sum()
+    on_hand_end = init_qty.sum() + received - sales.sum()
+    ratio = on_hand_end / sales.sum()
+    assert -0.05 < ratio < 0.30

@@ -1,4 +1,10 @@
-"""Purchase orders and supplier deliveries (SYNTHETIC data)."""
+"""Purchase orders and supplier deliveries (SYNTHETIC data).
+
+Replenishment is stock-aware. At each order date the buyer targets the demand over the
+planned lead time plus PO_REVIEW_DAYS days, times a safety buffer and a forecast error,
+and orders the difference to the inventory position (everything received or scheduled,
+minus past sales). Months where the position already covers the target get no order.
+"""
 
 from __future__ import annotations
 
@@ -11,20 +17,25 @@ from nexus.datagen.constants import (
     DELIVERY_STATUSES,
     EARLY_DELIVERY_MAX_DAYS,
     INACTIVE_PRODUCT_CUTOFF_DAYS,
+    INITIAL_STOCK_BUFFER,
+    INITIAL_STOCK_COVER_DAYS,
     LATE_DELAY_EXTRA_MEAN,
     MIN_PO_QTY,
     ON_TIME_PROB_MAX,
     ON_TIME_PROB_MIN,
     PEAK_SEASON_MONTHS,
     PEAK_SEASON_ON_TIME_PENALTY,
-    PO_QTY_BUFFER,
-    PO_QTY_NOISE_SIGMA,
+    PO_FORECAST_NOISE_SIGMA,
+    PO_REVIEW_DAYS,
+    PO_SAFETY_BUFFER,
     SHORT_SHIPMENT_PROB,
     SHORT_SHIPMENT_RANGE,
     STREAM_PURCHASE_ORDERS,
 )
 
 NULLABLE_DELIVERY_COLUMNS = ["actual_delivery_date", "quantity_received", "defective_units"]
+# Extra days of padded demand so that horizons running past the window end can be sized.
+_DEMAND_TAIL_DAYS = 90
 
 
 def _rng(seed: int, stream: int) -> np.random.Generator:
@@ -34,6 +45,26 @@ def _rng(seed: int, stream: int) -> np.random.Generator:
 
 def _month_starts() -> pd.DatetimeIndex:
     return pd.date_range(DATA_START, DATA_END, freq="MS")
+
+
+def _n_days() -> int:
+    return (DATA_END - DATA_START).days + 1
+
+
+def daily_units_sold(
+    orders: pd.DataFrame, order_items: pd.DataFrame, products: pd.DataFrame
+) -> np.ndarray:
+    """Units sold per product (rows, in products order) and day (columns).
+
+    Only completed orders count as demand. Day 0 is DATA_START.
+    """
+    completed = orders.loc[orders["order_status"] == "Completed", ["order_id", "order_date"]]
+    lines = order_items[["order_id", "product_id", "quantity"]].merge(completed, on="order_id")
+    day_idx = (lines["order_date"] - pd.Timestamp(DATA_START)).dt.days.to_numpy()
+    prod_pos = pd.Index(products["product_id"]).get_indexer(lines["product_id"])
+    units = np.zeros((len(products), _n_days()), dtype=np.int64)
+    np.add.at(units, (prod_pos, day_idx), lines["quantity"].to_numpy())
+    return units
 
 
 def monthly_units_sold(
@@ -57,6 +88,23 @@ def monthly_units_sold(
     return units
 
 
+def initial_stock(sales: np.ndarray, products: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+    """Day index and quantity of each product's initial stock.
+
+    The stock arrives on the product's first listed day (day 0 for products launched before
+    the window) and covers INITIAL_STOCK_COVER_DAYS days of demand times INITIAL_STOCK_BUFFER,
+    with a minimum of MIN_PO_QTY units.
+    """
+    n_days = sales.shape[1]
+    launch_idx = (products["launch_date"] - pd.Timestamp(DATA_START)).dt.days.to_numpy()
+    start = np.clip(launch_idx, 0, n_days - 1).astype(np.int64)
+    qty = np.zeros(len(products), dtype=np.int64)
+    for i, s in enumerate(start):
+        window = sales[i, s : s + INITIAL_STOCK_COVER_DAYS]
+        qty[i] = max(MIN_PO_QTY, int(np.ceil(window.sum() * INITIAL_STOCK_BUFFER)))
+    return start, qty
+
+
 def generate_purchase_orders(
     products: pd.DataFrame,
     suppliers: pd.DataFrame,
@@ -64,36 +112,41 @@ def generate_purchase_orders(
     order_items: pd.DataFrame,
     seed: int,
 ) -> pd.DataFrame:
-    """Generate replenishment purchase orders.
+    """Generate stock-aware replenishment purchase orders.
 
-    One order per product and month when the product has launched and has demand in the
-    following month. The quantity follows that demand with a buffer and noise. Delivery
-    timing follows the supplier's lead time and on-time rate. Deliveries that would land
-    after the end of the window are marked 'In Transit' with empty delivery fields.
+    Candidate orders are one per product and month when the product has launched and has
+    demand in the following month. Delivery timing follows the supplier's lead time and
+    on-time rate, and is drawn before sizing so it does not depend on quantities. Quantities
+    are then set product by product in date order from the inventory position. Deliveries
+    that would land after the end of the window are marked 'In Transit' with empty delivery
+    fields.
     """
     rng = _rng(seed, STREAM_PURCHASE_ORDERS)
     months = _month_starts()
+    n_days = _n_days()
+    start = pd.Timestamp(DATA_START)
 
+    sales = daily_units_sold(orders, order_items, products)
     units = monthly_units_sold(orders, order_items, products)
     next_units = units.copy()
     next_units[:, :-1] = units[:, 1:]  # demand of the following month; the last month reuses its own
 
     days_in_month = months.days_in_month.to_numpy()
+    month_start_day = (months - start).days.to_numpy()
     month_end = (months + pd.to_timedelta(days_in_month - 1, unit="D")).to_numpy()
     month_end = month_end.astype("datetime64[ns]")
     launch = products["launch_date"].to_numpy().astype("datetime64[ns]")
     eligible = (launch[:, None] <= month_end[None, :]) & (next_units > 0)
 
-    p_idx, m_idx = np.nonzero(eligible)
+    p_idx, m_idx = np.nonzero(eligible)  # grouped by product, months ascending
     n = len(p_idx)
     if n == 0:
         raise ValueError("No purchase orders were generated; check the configuration")
 
-    demand = next_units[p_idx, m_idx]
-    noise = rng.lognormal(0.0, PO_QTY_NOISE_SIGMA, size=n)
-    quantity = np.maximum(MIN_PO_QTY, np.ceil(demand * PO_QTY_BUFFER * noise)).astype(np.int64)
-
+    # Timing draws (same order as before, independent of quantities).
+    noise = rng.lognormal(0.0, PO_FORECAST_NOISE_SIGMA, size=n)
     offset = np.floor(rng.random(n) * days_in_month[m_idx]).astype(np.int64)
+    order_day = month_start_day[m_idx] + offset
     order_date = months[m_idx] + pd.to_timedelta(offset, unit="D")
 
     # Inactive products are not replenished in the last N days of the window.
@@ -116,17 +169,47 @@ def generate_purchase_orders(
     is_late = rng.random(n) >= on_time_p
     early = rng.integers(0, EARLY_DELIVERY_MAX_DAYS + 1, size=n)
     late = 1 + rng.poisson(LATE_DELAY_EXTRA_MEAN, size=n)
-    delay = np.where(is_late, late, -early)
+    delay = np.where(is_late, late, -early).astype(np.int64)
 
+    arrival_day = order_day + planned_lead + delay
     expected = order_date + pd.to_timedelta(planned_lead, unit="D")
     actual = expected + pd.to_timedelta(delay, unit="D")
-    delivered = np.asarray(actual <= pd.Timestamp(DATA_END))
+    delivered = arrival_day <= n_days - 1
 
     short = rng.random(n) < SHORT_SHIPMENT_PROB
     fraction = rng.uniform(SHORT_SHIPMENT_RANGE[0], SHORT_SHIPMENT_RANGE[1], size=n)
-    short_units = np.floor(quantity * fraction).astype(np.int64)
-    received = quantity - np.where(short, short_units, 0)
+
+    # Sequential sizing from the inventory position, product by product.
+    start_idx, init_qty = initial_stock(sales, products)
+    keep = ~drop
+    quantity = np.zeros(n, dtype=np.int64)
+    received = np.zeros(n, dtype=np.int64)
+
+    for p in np.unique(p_idx):
+        rows = np.flatnonzero((p_idx == p) & keep)
+        if len(rows) == 0:
+            continue
+        tail_rate = float(sales[p, -30:].mean())
+        padded = np.concatenate([sales[p], np.full(_DEMAND_TAIL_DAYS, tail_rate)])
+        cum_sales = np.concatenate([[0.0], np.cumsum(padded)])
+        scheduled = float(init_qty[p])  # everything received or scheduled so far
+        for r in rows:
+            t = int(order_day[r])
+            end = min(t + int(planned_lead[r]) + PO_REVIEW_DAYS, len(padded))
+            demand = cum_sales[end] - cum_sales[t]
+            position = scheduled - cum_sales[t]  # received or scheduled minus past sales
+            target = demand * PO_SAFETY_BUFFER * noise[r]
+            qty = int(np.ceil(target - position))
+            if qty <= 0:
+                continue
+            qty = max(MIN_PO_QTY, qty)
+            short_units = int(np.floor(qty * fraction[r])) if short[r] else 0
+            quantity[r] = qty
+            received[r] = qty - short_units
+            scheduled += received[r]
+
     defective = rng.binomial(received, defect_rate).astype(np.int64)
+    valid = keep & (quantity > 0)
 
     unit_cost = products["unit_cost"].to_numpy()[p_idx]
     delivered_s = pd.Series(delivered)
@@ -146,7 +229,7 @@ def generate_purchase_orders(
             "order_cost": np.round(quantity * unit_cost, 2),
         }
     )
-    frame = frame.loc[~drop]
+    frame = frame.loc[valid]
     frame = frame.sort_values(["order_date", "product_id"], kind="stable").reset_index(drop=True)
     frame.insert(0, "po_id", [f"PO-{i:06d}" for i in range(1, len(frame) + 1)])
     return frame
