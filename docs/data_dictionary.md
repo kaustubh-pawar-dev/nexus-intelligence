@@ -117,3 +117,27 @@ Notes and simplifications:
 - Refunds are right-censored: late-2025 payments have less time to be refunded, so refund rates in the final weeks understate the true rate.
 - There are no payment retries, installments, chargebacks or partial captures. Cancelled orders have no payment and no refund.
 - Net revenue calculations later in the project must use captured payment amounts minus refunds, and must label failed payments as uncollected.
+
+## purchase_orders (about one replenishment order per product per month; see the summary script for counts)
+
+| Column | Type | Description |
+|---|---|---|
+| po_id | string, PK | Format `PO-000001`, assigned in order-date order. |
+| supplier_id | string, FK | References `suppliers.supplier_id`. Always the supplier of the product. |
+| product_id | string, FK | References `products.product_id`. |
+| order_date | date | A random day within the month, between 2023-01-01 and 2025-12-31. |
+| expected_delivery_date | date | `order_date` plus the supplier's `lead_time_mean_days` (the planned lead time). |
+| actual_delivery_date | date, nullable | Expected date plus a delay. Empty when `delivery_status` is `In Transit`. |
+| delivery_status | string | `Delivered` or `In Transit` (the delivery would land after 2025-12-31). |
+| quantity_ordered | integer | `max(5, ceil(next month's units sold * 1.10 * noise))`. |
+| quantity_received | integer, nullable | Equals the ordered quantity, or 5% to 30% fewer for about 5% of deliveries. Empty when in transit. |
+| defective_units | integer, nullable | Binomial draw of received units with the supplier's `defect_rate`. Empty when in transit. |
+| unit_cost | decimal | Snapshot of the product's `unit_cost`. |
+| order_cost | decimal | `round(quantity_ordered * unit_cost, 2)`. |
+
+Notes and simplifications:
+- Each delivery is on time with probability equal to the supplier's `on_time_delivery_rate`, reduced by 0.06 for orders placed in October to December. On-time deliveries arrive 0 to 2 days early, and late ones arrive 1 plus a Poisson(4) number of days late. These are simulation settings, not real-world findings.
+- The three nullable columns are the only intentional nulls. They are empty only for `In Transit` rows, which are right-censored by the end of the observation window.
+- Quantities follow the next month's actual unit sales with noise. A real buyer would use a forecast. January 2023 demand has no purchase order, because opening stock is handled in the inventory step.
+- Inactive products are not replenished in the last 180 days of the window.
+- Planned lead times are constant per supplier, and there is no minimum order quantity, freight cost or order consolidation.

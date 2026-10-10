@@ -233,3 +233,29 @@ DEFECTIVE_REASON_MAX = 0.70
 OTHER_REFUND_REASONS = ("Not As Described", "Changed Mind", "Late Delivery", "Wrong Item")
 OTHER_REFUND_REASON_PROBS = (0.30, 0.35, 0.20, 0.15)
 REFUND_REASONS = (DEFECTIVE_REASON, *OTHER_REFUND_REASONS)
+
+# ---------------------------------------------------------------------------
+# Purchase orders and supplier deliveries (SYNTHETIC)
+# ---------------------------------------------------------------------------
+STREAM_PURCHASE_ORDERS = 8
+
+# Quantity ordered = max(MIN_PO_QTY, ceil(next month's units * buffer * lognormal noise)).
+PO_QTY_BUFFER = 1.10
+PO_QTY_NOISE_SIGMA = 0.20
+MIN_PO_QTY = 5
+
+# Orders placed in these months face congestion: on-time probability drops for all suppliers.
+PEAK_SEASON_MONTHS = (10, 11, 12)
+PEAK_SEASON_ON_TIME_PENALTY = 0.06
+ON_TIME_PROB_MIN = 0.05
+ON_TIME_PROB_MAX = 0.995
+
+# On time: delivery 0 to N days early. Late: 1 + Poisson(extra mean) days after the plan.
+EARLY_DELIVERY_MAX_DAYS = 2
+LATE_DELAY_EXTRA_MEAN = 4.0
+
+# Short shipments: a share of deliveries arrive with fewer units than ordered.
+SHORT_SHIPMENT_PROB = 0.05
+SHORT_SHIPMENT_RANGE = (0.05, 0.30)
+
+DELIVERY_STATUSES = ("Delivered", "In Transit")
