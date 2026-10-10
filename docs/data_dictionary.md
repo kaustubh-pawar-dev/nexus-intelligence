@@ -87,3 +87,33 @@ Notes and simplifications:
 - Products cannot sell before `launch_date`. Inactive products are not sold in the last 180 days of the window.
 - Cancelled orders keep their lines. Revenue metrics must exclude them.
 - Payments, refunds and shipping are generated in later steps. Prices do not change over time. There is no tax or shipping charge.
+
+
+## payments (one row per completed order; see the summary script for counts)
+
+| Column | Type | Description |
+|---|---|---|
+| payment_id | string, PK | Format `PAY-000001`. |
+| order_id | string, FK, unique | References `orders.order_id`. Only `Completed` orders have a payment. |
+| payment_date | date | Order date plus 0 to 3 days (bank transfers take 1 to 7 extra days). Clipped at 2025-12-31. |
+| payment_method | string | Credit Card, Debit Card, UPI, Net Banking, Digital Wallet or Bank Transfer. The mix depends on the customer segment (Enterprise mostly pays by bank transfer). |
+| payment_status | string | `Captured` or `Failed`. The failure probability depends on the method (Net Banking is the highest at 6%). A `Failed` payment on a completed order is simulated uncollected revenue. |
+| amount | decimal | Sum of the order's `line_total` values. |
+
+## refunds (see the summary script for counts)
+
+| Column | Type | Description |
+|---|---|---|
+| refund_id | string, PK | Format `REF-000001`, assigned in refund-date order. |
+| payment_id | string, FK, unique | References `payments.payment_id`. Only `Captured` payments can be refunded, at most once each. |
+| order_id | string, FK | References `orders.order_id`, consistent with the payment. |
+| refund_date | date | Payment date plus 3 to 30 days. Refunds that would fall after 2025-12-31 are not generated. |
+| refund_type | string | `Full` (about 60%, equals the payment amount) or `Partial` (20% to 80% of the payment amount). |
+| refund_reason | string | Defective, Not As Described, Changed Mind, Late Delivery or Wrong Item. The `Defective` share rises with the order's supplier defect score. |
+| refund_amount | decimal | Amount returned to the customer. Never above the payment amount. |
+
+Notes and simplifications:
+- Refund probability per captured payment is `0.02 + 2.0 * defect score`, where the defect score is the line-value-weighted `defect_rate` of the suppliers behind the order's products. This link is a simulation setting, not a real-world finding.
+- Refunds are right-censored: late-2025 payments have less time to be refunded, so refund rates in the final weeks understate the true rate.
+- There are no payment retries, installments, chargebacks or partial captures. Cancelled orders have no payment and no refund.
+- Net revenue calculations later in the project must use captured payment amounts minus refunds, and must label failed payments as uncollected.

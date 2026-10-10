@@ -183,3 +183,53 @@ MAX_QUANTITY = 20
 PRODUCT_POPULARITY_SIGMA = 0.8
 # Inactive products are not sold in the last N days of the window.
 INACTIVE_PRODUCT_CUTOFF_DAYS = 180
+
+# ---------------------------------------------------------------------------
+# Payments and refunds (SYNTHETIC)
+# ---------------------------------------------------------------------------
+STREAM_PAYMENTS = 6
+STREAM_REFUNDS = 7
+
+PAYMENT_METHODS = (
+    "Credit Card", "Debit Card", "UPI", "Net Banking", "Digital Wallet", "Bank Transfer",
+)
+# Probabilities follow the order of PAYMENT_METHODS and each row sums to 1.
+SEGMENT_PAYMENT_METHOD_PROBS = {
+    "Consumer": (0.30, 0.20, 0.25, 0.08, 0.12, 0.05),
+    "Small Business": (0.35, 0.15, 0.15, 0.10, 0.05, 0.20),
+    "Enterprise": (0.15, 0.02, 0.03, 0.10, 0.00, 0.70),
+}
+
+PAYMENT_STATUSES = ("Captured", "Failed")
+# A failed payment on a completed order is simulated uncollected revenue.
+PAYMENT_FAILURE_RATE = {
+    "Credit Card": 0.025,
+    "Debit Card": 0.035,
+    "UPI": 0.030,
+    "Net Banking": 0.060,
+    "Digital Wallet": 0.020,
+    "Bank Transfer": 0.010,
+}
+
+# Days between order and payment. Bank transfers add 1 to 7 extra days.
+PAYMENT_DELAY_DAYS = (0, 1, 2, 3)
+PAYMENT_DELAY_PROBS = (0.80, 0.12, 0.05, 0.03)
+BANK_TRANSFER_EXTRA_DELAY_MAX = 7
+
+# Refund probability per captured payment = base + sensitivity * order defect score,
+# where the defect score is the line-value-weighted supplier defect rate of the order.
+REFUND_BASE_PROB = 0.02
+REFUND_DEFECT_SENSITIVITY = 2.0
+REFUND_FULL_SHARE = 0.60
+REFUND_PARTIAL_RANGE = (0.20, 0.80)
+REFUND_MIN_DAYS = 3
+REFUND_MAX_DAYS = 30
+REFUND_TYPES = ("Full", "Partial")
+
+DEFECTIVE_REASON = "Defective"
+DEFECTIVE_REASON_BASE = 0.15
+DEFECTIVE_REASON_SLOPE = 8.0
+DEFECTIVE_REASON_MAX = 0.70
+OTHER_REFUND_REASONS = ("Not As Described", "Changed Mind", "Late Delivery", "Wrong Item")
+OTHER_REFUND_REASON_PROBS = (0.30, 0.35, 0.20, 0.15)
+REFUND_REASONS = (DEFECTIVE_REASON, *OTHER_REFUND_REASONS)
