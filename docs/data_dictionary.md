@@ -38,3 +38,20 @@ Default random seed: 42. Each table uses its own random stream derived from `[se
 
 - These two tables are clean. Deliberate data-quality defects are injected in a later step.
 - Categories are evenly balanced (20 each) for simplicity, which real catalogs rarely are.
+## customers (5,000 rows)
+
+| Column | Type | Description |
+|---|---|---|
+| customer_id | string, PK | Format `CUST-00001`. Assigned in signup order. |
+| email | string, unique | Fictional address at the reserved domain `example.com`. |
+| country | string | One of 8 countries, sampled with fixed weights (India 28%, United States 24%, ...). |
+| region | string | Region derived from country. |
+| segment | string | `Consumer` (70%), `Small Business` (22%) or `Enterprise` (8%). |
+| acquisition_channel | string | One of 6 channels: Organic Search, Paid Search, Social Media, Email, Referral, Direct. |
+| signup_date | date | Between 2021-01-01 and 2025-12-31. Daily signup weight rises linearly, so the customer base grows. About 28% of customers signed up before the 2023-01-01 analysis window. |
+| marketing_opt_in | boolean | True for about 62% of customers. |
+
+Notes:
+- Purchase behavior, churn and refunds are **not** stored here. They are generated in the transactions step.
+- The customers table is clean. Duplicates and missing values are injected in a later data-quality step.
+- Customer attributes are simplified: no names, addresses or ages, and every email is a fictional `example.com` address.

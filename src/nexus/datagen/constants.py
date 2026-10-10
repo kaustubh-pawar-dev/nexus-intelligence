@@ -88,3 +88,38 @@ PRODUCT_ADJECTIVES = (
     "Premium", "Classic", "Compact", "Smart", "Eco",
     "Pro", "Essential", "Deluxe", "Everyday", "Ultra",
 )
+# ---------------------------------------------------------------------------
+# Customers (SYNTHETIC)
+# ---------------------------------------------------------------------------
+N_CUSTOMERS = 5000
+STREAM_CUSTOMERS = 3
+
+# Customers can sign up before the analysis window, so history exists on day one.
+CUSTOMER_SIGNUP_START = date(2021, 1, 1)
+
+
+class CustomerCountry(NamedTuple):
+    region: str
+    weight: float
+
+
+CUSTOMER_COUNTRY_PROFILES: dict[str, CustomerCountry] = {
+    "India": CustomerCountry("Asia", 0.28),
+    "United States": CustomerCountry("North America", 0.24),
+    "United Kingdom": CustomerCountry("Europe", 0.10),
+    "Germany": CustomerCountry("Europe", 0.08),
+    "Australia": CustomerCountry("Oceania", 0.07),
+    "United Arab Emirates": CustomerCountry("Middle East", 0.07),
+    "Singapore": CustomerCountry("Asia", 0.06),
+    "Canada": CustomerCountry("North America", 0.10),
+}
+
+CUSTOMER_SEGMENTS = ("Consumer", "Small Business", "Enterprise")
+SEGMENT_PROBS = (0.70, 0.22, 0.08)
+
+ACQUISITION_CHANNELS = (
+    "Organic Search", "Paid Search", "Social Media", "Email", "Referral", "Direct",
+)
+CHANNEL_PROBS = (0.28, 0.22, 0.15, 0.10, 0.12, 0.13)
+
+MARKETING_OPT_IN_RATE = 0.62
