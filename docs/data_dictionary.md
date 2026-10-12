@@ -138,6 +138,34 @@ Notes and simplifications:
 Notes and simplifications:
 - Each delivery is on time with probability equal to the supplier's `on_time_delivery_rate`, reduced by 0.06 for orders placed in October to December. On-time deliveries arrive 0 to 2 days early, and late ones arrive 1 plus a Poisson(4) number of days late. These are simulation settings, not real-world findings.
 - The three nullable columns are the only intentional nulls. They are empty only for `In Transit` rows, which are right-censored by the end of the observation window.
-- Order quantities follow a stock-aware order-up-to policy. At the order date the buyer targets the actual unit sales over the planned lead time plus 45 days, multiplied by a 1.15 safety buffer and forecast noise (sigma 0.10), and orders the difference to the current inventory position (stock received or scheduled, minus past sales). A month where the position already covers the target gets no order. Using actual future sales is a stand-in for a forecast. Each product also starts with initial stock (45 days of demand times 1.25 on its first listed day) that is not a purchase order.
+- Order quantities follow a stock-aware order-up-to policy. At the order date the buyer targets the actual unit sales over the planned lead time plus 45 days, multiplied by a 1.15 safety buffer and forecast noise (sigma 0.10), and orders the difference to the current inventory position (stock received or scheduled, net of defective units that are written off on arrival, minus past sales; the buyer is assumed to know a delivery's defect count). A month where the position already covers the target gets no order. Using actual future sales is a stand-in for a forecast. Each product also starts with initial stock (45 days of demand times 1.25 on its first listed day) that is not a purchase order.
 - Inactive products are not replenished in the last 180 days of the window.
 - Planned lead times are constant per supplier, and there is no minimum order quantity, freight cost or order consolidation.
+
+
+## inventory_daily (one row per product per listed day; see the summary script for counts)
+
+| Column | Type | Description |
+|---|---|---|
+| product_id | string, FK | References `products.product_id`. Together with `date` it forms the primary key. |
+| date | date | From the product's first listed day (its `launch_date`, or 2023-01-01 for older products) to 2025-12-31, with no gaps. |
+| opening_stock | integer | Units on hand at the start of the day. Equals the previous day's `closing_stock`, and 0 on the first day. |
+| initial_stock_units | integer | Opening stock placed on the first listed day (45 days of demand times 1.25, minimum 5). 0 on every other day. It is not a purchase order. |
+| po_receipts_units | integer | Units received from purchase orders that arrived that day (`quantity_received`). Arrivals before the first listed day are counted on that day. |
+| defective_writeoff_units | integer | Defective units among the day's receipts, written off from stock on arrival. |
+| units_demanded | integer | Units on completed orders placed that day. |
+| units_fulfilled | integer | Units shipped that day, including units that cleared earlier backorders. |
+| closing_stock | integer | Units on hand at the end of the day. Never negative. |
+| backorder_units | integer | Cumulative unmet demand at the end of the day. Never both positive with `closing_stock`. |
+| stockout_flag | integer | 1 when `backorder_units` is above 0, otherwise 0. |
+| inventory_value | decimal | `round(closing_stock * unit_cost, 2)`, at cost. |
+
+Identities:
+- `closing_stock = opening_stock + initial_stock_units + po_receipts_units - defective_writeoff_units - units_fulfilled`
+- `backorder_units = previous backorder_units + units_demanded - units_fulfilled`
+
+Notes and simplifications:
+- Unmet demand is carried forward as backorders. Customers wait and do not cancel, so a stockout creates delay but no lost sales in this table. Lost-sales assumptions belong to the scenario step.
+- Stock is derived from the generated purchase orders and sales, and is not simulated separately. There are no stock counts, shrinkage, returns to stock or transfers. Refunded units are not returned to stock.
+- Orders that are `In Transit` at the end of the window are not counted as receipts.
+- The table is tied to the stock-aware purchase orders from Step 8. A change to the purchasing settings changes this table.

@@ -184,6 +184,7 @@ def generate_purchase_orders(
     keep = ~drop
     quantity = np.zeros(n, dtype=np.int64)
     received = np.zeros(n, dtype=np.int64)
+    defective = np.zeros(n, dtype=np.int64)
 
     for p in np.unique(p_idx):
         rows = np.flatnonzero((p_idx == p) & keep)
@@ -206,9 +207,9 @@ def generate_purchase_orders(
             short_units = int(np.floor(qty * fraction[r])) if short[r] else 0
             quantity[r] = qty
             received[r] = qty - short_units
-            scheduled += received[r]
+            defective[r] = rng.binomial(received[r], defect_rate[r])
+            scheduled += received[r] - defective[r]  # defective units are written off on arrival
 
-    defective = rng.binomial(received, defect_rate).astype(np.int64)
     valid = keep & (quantity > 0)
 
     unit_cost = products["unit_cost"].to_numpy()[p_idx]
