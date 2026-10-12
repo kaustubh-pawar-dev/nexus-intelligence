@@ -169,3 +169,26 @@ Notes and simplifications:
 - Stock is derived from the generated purchase orders and sales, and is not simulated separately. There are no stock counts, shrinkage, returns to stock or transfers. Refunded units are not returned to stock.
 - Orders that are `In Transit` at the end of the window are not counted as receipts.
 - The table is tied to the stock-aware purchase orders from Step 8. A change to the purchasing settings changes this table.
+
+## shipments (one row per completed order; see the summary script for counts)
+
+| Column | Type | Description |
+|---|---|---|
+| shipment_id | string, PK | Format `SHP-000001`, assigned in order-id order. |
+| order_id | string, FK, unique | References `orders.order_id`. Only `Completed` orders have a shipment. |
+| carrier | string | SwiftShip, BlueLine Express, GlobalPost or RapidRoute. Chosen independently of region. |
+| ship_date | date, nullable | Order date plus `handling_days`. Empty when `shipment_status` is `Awaiting Shipment`. |
+| promised_delivery_date | date | Order date plus 2 processing days, the regional base transit days and 1 buffer day. Depends only on the customer's region. |
+| delivered_date | date, nullable | `ship_date` plus `transit_days`. Empty unless the status is `Delivered`. |
+| shipment_status | string | `Delivered`, `In Transit` (shipped but not delivered by 2025-12-31) or `Awaiting Shipment` (dispatch would fall after 2025-12-31). |
+| had_backorder | integer | 1 when any product on the order had backorders (`stockout_flag` = 1 in `inventory_daily`) on the order date. |
+| handling_days | integer, nullable | Days from order to dispatch: 0 to 2 normally, plus 2 and a Poisson(4) number of days when `had_backorder` is 1. |
+| transit_days | integer, nullable | Days from dispatch to delivery. Depends on region and carrier speed, with a random jitter and occasional disruptions. |
+| delivery_delay_days | integer, nullable | `delivered_date - promised_delivery_date`. Positive means late. |
+| shipping_cost | decimal | Cost to the business: regional base cost times a carrier multiplier, plus 8% per extra order line. Not charged to customers. |
+
+Notes and simplifications:
+- Slower carriers have a higher late-delivery probability, and orders in backorder are dispatched later. These are simulation settings, not real-world findings.
+- The three blank-field groups are the only intentional nulls. They exist because of right-censoring at the end of the observation window.
+- A refund reason of `Late Delivery` in `refunds` is not linked to actual shipment lateness, so refund behavior is independent of delivery delay in this simulation.
+- There is no weight, volume, tracking, damage or return shipping.

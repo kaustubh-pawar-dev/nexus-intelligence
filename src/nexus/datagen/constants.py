@@ -270,3 +270,47 @@ PO_FORECAST_NOISE_SIGMA = 0.10
 # Each product starts with stock on its first listed day (window start for older products).
 INITIAL_STOCK_COVER_DAYS = 45
 INITIAL_STOCK_BUFFER = 1.25
+
+# ---------------------------------------------------------------------------
+# Shipments (SYNTHETIC)
+# ---------------------------------------------------------------------------
+STREAM_SHIPMENTS = 9
+
+CARRIERS = ("SwiftShip", "BlueLine Express", "GlobalPost", "RapidRoute")
+CARRIER_PROBS = (0.30, 0.35, 0.25, 0.10)
+CARRIER_SPEED_MULTIPLIER = {
+    "SwiftShip": 0.8, "BlueLine Express": 1.0, "GlobalPost": 1.4, "RapidRoute": 0.9,
+}
+# Probability of a transit disruption that adds 1 + Poisson(TRANSIT_LATE_EXTRA_MEAN) days.
+CARRIER_LATE_PROB = {
+    "SwiftShip": 0.04, "BlueLine Express": 0.06, "GlobalPost": 0.12, "RapidRoute": 0.08,
+}
+CARRIER_COST_MULTIPLIER = {
+    "SwiftShip": 1.3, "BlueLine Express": 1.1, "GlobalPost": 0.8, "RapidRoute": 1.2,
+}
+
+REGION_BASE_TRANSIT_DAYS = {
+    "Asia": 3, "North America": 3, "Europe": 4, "Oceania": 6, "Middle East": 4,
+}
+REGION_BASE_SHIPPING_COST = {
+    "Asia": 8.0, "North America": 7.0, "Europe": 10.0, "Oceania": 14.0, "Middle East": 11.0,
+}
+
+# Days between order and dispatch for an order with all products in stock.
+HANDLING_DAYS = (0, 1, 2)
+HANDLING_PROBS = (0.50, 0.35, 0.15)
+# Extra dispatch delay when a product on the order is in backorder: base + Poisson(mean).
+BACKORDER_EXTRA_BASE_DAYS = 2
+BACKORDER_EXTRA_MEAN_DAYS = 4.0
+
+TRANSIT_JITTER = (-1, 0, 1)
+TRANSIT_LATE_EXTRA_MEAN = 2.0
+
+# Promised delivery = order date + processing + regional base transit + buffer.
+PROMISE_PROCESSING_DAYS = 2
+PROMISE_BUFFER_DAYS = 1
+
+# Shipping cost = regional base * carrier multiplier * (1 + share * (lines - 1)).
+EXTRA_LINE_COST_SHARE = 0.08
+
+SHIPMENT_STATUSES = ("Delivered", "In Transit", "Awaiting Shipment")
