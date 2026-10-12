@@ -192,3 +192,36 @@ Notes and simplifications:
 - The three blank-field groups are the only intentional nulls. They exist because of right-censoring at the end of the observation window.
 - A refund reason of `Late Delivery` in `refunds` is not linked to actual shipment lateness, so refund behavior is independent of delivery delay in this simulation.
 - There is no weight, volume, tracking, damage or return shipping.
+
+## daily_metrics (one row per calendar day, 2023-01-01 to 2025-12-31; 1,096 rows)
+
+A deterministic aggregation of the other tables. It has no random draws, and every column total reconciles to its source table.
+
+| Column | Type | Basis | Description |
+|---|---|---|---|
+| date | date, PK | | Calendar day. No gaps. |
+| orders_placed | integer | order date | All orders placed that day, including cancelled ones. |
+| orders_completed | integer | order date | Orders with status `Completed`. |
+| orders_cancelled | integer | order date | Orders with status `Cancelled`. `orders_placed = orders_completed + orders_cancelled`. |
+| new_customers | integer | signup date | Customers whose `signup_date` is that day. Signups before 2023-01-01 are not counted here. |
+| active_customers | integer | order date | Distinct customers with at least one completed order that day. |
+| units_sold | integer | order date | Units on completed orders. |
+| gross_revenue | decimal | order date | Sum of `line_total` of completed orders, after order discounts and before refunds. Failed payments are not deducted. |
+| discount_amount | decimal | order date | `sum(quantity * unit_price)` minus `gross_revenue`. |
+| cogs | decimal | order date | Cost of goods sold: `sum(quantity * unit_cost)` of completed orders. |
+| gross_margin | decimal | order date | `gross_revenue - cogs`. Before shipping, refunds and failed payments, so it is not a full profit measure. |
+| shipping_cost | decimal | order date | Shipping cost of the shipments of that day's completed orders. A cost to the business. |
+| payments_captured | decimal | payment date | Amount of captured payments that landed that day. |
+| payments_failed | decimal | payment date | Amount of failed payments that day. Simulated uncollected revenue. |
+| refunds_amount | decimal | refund date | Amount refunded that day. |
+| po_spend | decimal | PO order date | `order_cost` of purchase orders placed that day. Procurement spend, not cost of goods sold. |
+| listed_products | integer | date | Products listed that day (rows of `inventory_daily`). |
+| products_in_stockout | integer | date | Listed products with backorders at the end of the day. |
+| backorder_units | integer | date | Total backorder units at the end of the day. |
+| inventory_value | decimal | date | Total closing stock at cost. |
+
+Notes and simplifications:
+- Two bases are kept separate on purpose. Order-basis columns use the order date. Cash-basis columns use the payment or refund date, so on a single day they differ from revenue, while their totals over the window match.
+- Net cash collected is `payments_captured - refunds_amount`. Failed payments are never netted into revenue, and are reported as uncollected.
+- Orders from late 2025 have had less time to be paid or refunded, so cash and refund columns at the end of the window understate the true figures (right-censoring).
+- The table contains no lost-sales estimate for stockouts. Those assumptions belong to the scenario step.
