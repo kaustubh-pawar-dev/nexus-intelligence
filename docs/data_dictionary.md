@@ -225,3 +225,46 @@ Notes and simplifications:
 - Net cash collected is `payments_captured - refunds_amount`. Failed payments are never netted into revenue, and are reported as uncollected.
 - Orders from late 2025 have had less time to be paid or refunded, so cash and refund columns at the end of the window understate the true figures (right-censoring).
 - The table contains no lost-sales estimate for stockouts. Those assumptions belong to the scenario step.
+
+## Injected data-quality defects (the "as delivered" layer in data/raw/dirty)
+
+The clean CSVs in `data/raw/` are the **ground truth**. `data/raw/dirty/` is an "as delivered" copy used by the database and data-engineering steps. Four tables carry injected defects, and the other seven are copied unchanged. `defect_manifest.csv` records every injected change so the cleaning pipeline can be scored. The pipeline itself must never read the manifest.
+
+| Table | Defect type | Rate | What is injected |
+|---|---|---|---|
+| customers | exact_duplicate_row | 1.2% | A copy of an untouched row appended at the end of the file. |
+| customers | missing_email | 2% | `email` left empty. |
+| customers | country_variant | 1.5% | `country` written as `USA`, `UK`, `UAE` or in lower case. `region` is left unchanged. |
+| customers | future_signup_date | 0.3% | `signup_date` 30 to 399 days after 2025-12-31. |
+| orders | exact_duplicate_row | 0.8% | Appended copy of an untouched row. |
+| orders | date_format_dmy | 1% | `order_date` written as `dd/mm/yyyy` instead of `yyyy-mm-dd`. Days up to 12 are ambiguous with months. |
+| orders | missing_customer_id | 0.4% | `customer_id` left empty. |
+| orders | unknown_customer_id | 0.4% | `customer_id` set to `CUST-99999`, which does not exist. |
+| orders | invalid_discount_pct | 0.6% | `discount_pct` set to 1.5 (valid values are 0 to 0.20). |
+| orders | status_case_variant | 1.5% | `order_status` in lower case. |
+| order_items | exact_duplicate_row | 0.5% | Appended copy of an untouched row. |
+| order_items | negative_quantity | 0.2% | `quantity` multiplied by -1. |
+| order_items | missing_line_total | 0.3% | `line_total` left empty. |
+| order_items | zero_unit_price | 0.2% | `unit_price` set to 0. |
+| payments | exact_duplicate_row | 0.4% | Appended copy of an untouched row. |
+| payments | missing_amount | 0.3% | `amount` left empty. |
+| payments | method_case_variant | 2% | `payment_method` in lower case. |
+
+Rates apply to each table's clean row count, rounded to a whole number of rows.
+
+### defect_manifest.csv
+
+| Column | Description |
+|---|---|
+| table | The affected table. |
+| row_key | Primary key of the affected row (`order_id\|line_number` for `order_items`). |
+| defect_type | One of the types above. |
+| column | The changed column. Empty for `exact_duplicate_row`. |
+| original_value | Value in the clean table, as text. Empty when the original was empty. |
+| injected_value | Value in the dirty table, as text. Empty when the injected value is empty. |
+
+Notes and simplifications:
+- Each row has at most one cell defect, and duplicates are copies of rows with no cell defect, so the manifest is exact and defect groups never overlap.
+- Other tables are not made dirty. An order whose `customer_id` was damaged still has a valid payment and shipment. Cleaning must recover that link.
+- `daily_metrics.csv` is derived from the clean data. Totals computed from the cleaned dirty layer should reconcile to it.
+- The defect types and rates are simulation settings, not real-world error rates.
