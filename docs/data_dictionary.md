@@ -268,3 +268,22 @@ Notes and simplifications:
 - Other tables are not made dirty. An order whose `customer_id` was damaged still has a valid payment and shipment. Cleaning must recover that link.
 - `daily_metrics.csv` is derived from the clean data. Totals computed from the cleaned dirty layer should reconcile to it.
 - The defect types and rates are simulation settings, not real-world error rates.
+
+## PostgreSQL model (schema `core`)
+
+`sql/schema.sql` creates the cleaned relational model in the `core` schema of the `nexus_intelligence` database. It has the same 11 tables as the CSV files, with the same column names. The schema holds no data until the loading step.
+
+| Aspect | Design |
+|---|---|
+| Keys | Every table has a primary key. 11 foreign keys connect the tables: products to suppliers, orders to customers, order_items to orders and products, payments to orders, refunds to payments and orders, purchase_orders to suppliers and products, inventory_daily to products, and shipments to orders. |
+| Types | Money columns are `numeric`, never floating point. Dates are `date`. Flags such as `stockout_flag` are `smallint` with a 0 or 1 check. Categorical columns use `CHECK ... IN` lists. |
+| Rules enforced | `list_price > unit_cost`. Order, signup and inventory dates fall inside the observation window. Purchase orders and shipments must have exactly the delivery fields their status allows. The inventory stock identity and the stockout flag are checked. `orders_placed = orders_completed + orders_cancelled`. |
+| Nullable | `customers.email` (the missing-value policy decides whether a gap is recovered or rejected), and the delivery fields of in-transit purchase orders and open shipments. |
+| Not enforced | `line_total = round(quantity * unit_price * (1 - discount), 2)`. It is reconciled in the data-engineering step instead. |
+| Indexes | 14 indexes on foreign keys, date filters and a partial index for stockout days. |
+| Layers | `core` is the cleaned model. The "as delivered" files from `data/raw/dirty` are loaded into a separate `raw` schema, as text, in the data-engineering step. |
+
+Notes and simplifications:
+- The window dates (2021 to 2025) are hard-coded in check constraints, as simulation settings.
+- `sql/schema.sql` is idempotent. `python scripts/init_database.py --reset` drops and recreates `core` and destroys any loaded data.
+- The database password lives only in the git-ignored `.env`.
