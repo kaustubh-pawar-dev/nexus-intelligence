@@ -304,3 +304,22 @@ Notes and simplifications:
 - This step loads the clean layer only. The dirty files in `data/raw/dirty` are loaded as text into a separate `raw` schema in the data-engineering step.
 - Empty CSV fields load as NULL, which matches the nullable columns. `True` and `False` load as booleans.
 - The loader truncates only the 11 `core` tables.
+
+## The raw layer (schema `raw`)
+
+`python scripts/load_raw.py` loads the 11 files of `data/raw/dirty` into the `raw` schema of PostgreSQL. It is the first of three layers: `raw` (as delivered), `staging` (typed and deduplicated) and `core` (constraint-checked).
+
+| Aspect | Design |
+|---|---|
+| Types | Every data column is `text`, so defective values such as `01/02/2024` in a date column, a discount of `1.5` or a negative quantity load without being rejected. |
+| Columns | Same names and order as the `core` tables, so the cleaning step maps them one to one. |
+| `_row_id` | An identity column that keeps each row's position in the source file. It is the lineage key back to the file. |
+| `raw.load_log` | One row per table: source file name, SHA-256 of the file, rows loaded and load time. |
+| Empty fields | An unquoted empty CSV field loads as NULL. |
+| Reloading | Each load drops and recreates the raw tables in one transaction. A failed load leaves the previous layer unchanged. |
+| Not loaded | `defect_manifest.csv`. The cleaning pipeline must never read it. It exists only to score the pipeline. |
+
+Notes and simplifications:
+- No cleaning happens in this layer. Duplicates, missing values and invalid values are all present, exactly as delivered.
+- The raw tables have no constraints beyond the primary key on `_row_id`.
+- `reconcile_raw` checks row counts against the files, column names against `core`, and the stored hash against the file.
