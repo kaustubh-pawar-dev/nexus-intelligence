@@ -287,3 +287,20 @@ Notes and simplifications:
 - The window dates (2021 to 2025) are hard-coded in check constraints, as simulation settings.
 - `sql/schema.sql` is idempotent. `python scripts/init_database.py --reset` drops and recreates `core` and destroys any loaded data.
 - The database password lives only in the git-ignored `.env`.
+
+## Loading the clean data into PostgreSQL
+
+`python scripts/load_core.py` loads the 11 clean CSV files from `data/raw` into `core` using PostgreSQL `COPY`, in foreign-key order, inside one transaction. The tables are truncated first, so the load can be repeated. Any error rolls the whole load back.
+
+After loading, the script reconciles the database against the files:
+
+| Check | What it compares |
+|---|---|
+| Row counts | Each table against its CSV row count. |
+| Orphans | Nine joins that must return zero rows, such as completed orders without a payment or a shipment. |
+| Business totals | Revenue, cost of goods sold, captured and failed payments, refunds, shipping cost, purchase spend and inventory value, computed by SQL, against the totals of `daily_metrics.csv`. |
+
+Notes and simplifications:
+- This step loads the clean layer only. The dirty files in `data/raw/dirty` are loaded as text into a separate `raw` schema in the data-engineering step.
+- Empty CSV fields load as NULL, which matches the nullable columns. `True` and `False` load as booleans.
+- The loader truncates only the 11 `core` tables.
