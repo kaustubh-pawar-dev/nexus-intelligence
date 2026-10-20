@@ -323,3 +323,31 @@ Notes and simplifications:
 - No cleaning happens in this layer. Duplicates, missing values and invalid values are all present, exactly as delivered.
 - The raw tables have no constraints beyond the primary key on `_row_id`.
 - `reconcile_raw` checks row counts against the files, column names against `core`, and the stored hash against the file.
+
+## The staging layer (schema `staging`)
+
+`python scripts/build_staging.py` turns the raw layer into typed, deduplicated staging tables for `customers`, `orders`, `order_items` and `payments`. It reads only `raw` (and `raw.products` as the product catalogue). It never reads `defect_manifest.csv` or the `core` schema. Each staging row keeps `source_row_id`, the `_row_id` of the raw row it came from.
+
+Every decision is logged in `staging.row_issues` (`table_name`, `source_row_id`, `row_key`, `rule`, `action`). Actions are `fixed`, `flagged` (kept as is and reported), `dropped` (a duplicate key, keeping the lowest `_row_id`) and `quarantined` (kept out of staging). The view `staging.cleaning_summary` counts rows per rule and `staging.quarantine` lists the quarantined rows. A check verifies that every raw row is staged, dropped or quarantined.
+
+| Table | Rule | Action |
+|---|---|---|
+| all four | `duplicate_key` | Dropped. |
+| customers | `country_standardised` | `USA`, `UK`, `UAE` and lower-case spellings mapped to the canonical list. |
+| customers | `missing_email` | Flagged and left NULL. The email is not reconstructed from the customer id. |
+| customers | `signup_date_imputed_from_neighbours` | A signup date after 2025-12-31 is replaced by the date of the nearest earlier customer with a valid date, because ids follow signup order. It is an estimate. |
+| orders | `date_format_standardised` | The slash format is inferred from the whole column (one part never exceeds 12, the other does). Each parsed date must lie between the dates of its neighbouring order ids, or the order is quarantined as `unresolved_order_date`. |
+| orders | `status_case_standardised` | Mapped to `Completed` or `Cancelled`. |
+| orders | `discount_recovered_from_items` | A discount above 0.20 is replaced by the valid discount stored on the order's own lines. |
+| orders | `missing_customer_id`, `unknown_customer_id`, `customer_quarantined` | Quarantined. Payments and shipments carry no customer id, so the link cannot be recovered. |
+| order_items | `quantity_sign_corrected` | Only if the sign flip reproduces the stored line total. |
+| order_items | `unit_price_from_catalogue` | A price of 0 is replaced by the product list price. |
+| order_items | `line_total_recomputed` | `round(quantity * unit_price * (1 - discount), 2)`. |
+| order_items, payments | `order_not_in_staging` | Quarantined with the parent order. |
+| payments | `payment_method_case_standardised` | Mapped to the six canonical methods. |
+| payments | `amount_recomputed_from_items` | The sum of the order's lines, only if all of its lines are staged. |
+
+Notes and simplifications:
+- Quarantined orders carry revenue. The summary script reports it as revenue held back, so it is never silently lost.
+- The date check relies on order ids being assigned in order-date order, which is true of this dataset.
+- Staging has primary keys but not the full `core` constraints. Promotion into `core` is the next step.
