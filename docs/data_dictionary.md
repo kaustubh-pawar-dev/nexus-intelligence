@@ -351,3 +351,24 @@ Notes and simplifications:
 - Quarantined orders carry revenue. The summary script reports it as revenue held back, so it is never silently lost.
 - The date check relies on order ids being assigned in order-date order, which is true of this dataset.
 - Staging has primary keys but not the full `core` constraints. Promotion into `core` is the next step.
+
+## The analytics layer (schema `analytics`)
+
+`python scripts/build_analytics.py` builds the third and final layer: `raw` (as delivered), `staging` (typed and cleaned) and `analytics` (constraint-checked). It has the same 11 tables and constraints as `core`, because its DDL is `sql/schema.sql` rewritten for the `analytics` schema. All later analysis, models and the dashboard read `analytics`.
+
+| Table | Source |
+|---|---|
+| customers, orders, order_items, payments | The cleaned `staging` tables. |
+| suppliers, products, purchase_orders, inventory_daily | The unchanged `raw` tables, cast from text to the proper types. |
+| refunds | `raw.refunds`, minus refunds whose payment was quarantined. |
+| shipments | `raw.shipments`, minus shipments whose order was quarantined. |
+| daily_metrics | Recomputed by SQL from the `analytics` tables. It has the same 20 columns as before. |
+| promotion_log | One row per knock-on quarantined refund or shipment (`table_name`, `row_key`, `rule`, `action`). |
+
+`core` is not touched. It remains the ground truth used only to evaluate the pipeline. The promotion never reads `core` or `defect_manifest.csv`.
+
+Notes and simplifications:
+- Revenue in `analytics` is lower than ground truth by exactly the revenue of the quarantined orders (about 0.9%). Any figure from this layer is "cleaned-layer revenue".
+- Six imputed signup dates differ from ground truth by about one day.
+- `purchase_orders` and `inventory_daily` are unchanged, so they still reflect the demand of the quarantined orders. They are not re-derived from the cleaned orders.
+- A constraint violation during the build rolls the whole build back.
