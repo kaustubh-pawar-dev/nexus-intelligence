@@ -88,7 +88,24 @@ def test_cleaned_tables_equal_ground_truth(engine):
         "SELECT count(*) FROM staging.row_issues WHERE table_name = 'customers' "
         "AND rule = 'signup_date_imputed_from_neighbours'",
     )
-    assert _except_count(engine, "customers", "analytics", "core") <= imputed
+    cols = "customer_id, country, region, segment, acquisition_channel, signup_date, marketing_opt_in"
+    differing = _scalar(
+        engine,
+        f"SELECT count(*) FROM (SELECT {cols} FROM analytics.customers "
+        f"EXCEPT SELECT {cols} FROM core.customers) x",
+    )
+    assert differing <= imputed
+    flagged = _scalar(
+        engine,
+        "SELECT count(*) FROM staging.row_issues WHERE table_name = 'customers' "
+        "AND rule = 'missing_email' AND action = 'flagged'",
+    )
+    assert _scalar(engine, "SELECT count(*) FROM analytics.customers WHERE email IS NULL") == flagged
+    assert _scalar(
+        engine,
+        "SELECT count(*) FROM analytics.customers a JOIN core.customers c USING (customer_id) "
+        "WHERE a.email IS NOT NULL AND a.email <> c.email",
+    ) == 0
 
 
 def test_unchanged_tables_equal_ground_truth(engine):
