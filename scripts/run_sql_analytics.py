@@ -17,7 +17,7 @@ def main() -> int:
     engine = get_engine()
     print("SYNTHETIC DATA: ADVANCED SQL ANALYTICS ON THE CLEANED LAYER")
     print("(revenue held out by quarantine is not included; failed payments are shown separately)")
-    for name in list_queries():
+    for name in TITLES:
         print(f"\n{TITLES.get(name, name)}:")
         print(run_query(engine, name).to_string(index=False))
     return 0

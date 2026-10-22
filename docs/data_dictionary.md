@@ -399,3 +399,34 @@ Notes and simplifications:
 - All figures are from the cleaned layer, which holds out about 0.9% of revenue in quarantine.
 - Allocation by line value is a simplification. Real shipping cost depends on weight and volume.
 - Every query result is reconciled against an independent pandas calculation in `tests/test_sql_analytics.py`.
+
+## SQL analytics, part 2 (queries in `sql/analytics`)
+
+`python scripts/run_sql_analytics_2.py` prints these. They run only against the `analytics` schema.
+
+| Query | Technique | What it answers |
+|---|---|---|
+| `cohort_retention` | CTEs, first-activity self-join | For each cohort (month of first completed order), how many customers ordered again `months_since` months later. `nexus.sql_analytics.retention_curve` averages this across cohorts old enough to be observed. |
+| `customer_ltv` | CTE reuse, `percentile_cont`, `UNION ALL` | Observed lifetime value per customer by segment and by acquisition channel. |
+| `rfm_segments` | `NTILE(4)` windows with a deterministic tie-breaker | Customers scored by recency, frequency and monetary value as of 2025-12-31, then grouped into four segments. |
+| `supplier_performance` | Conditional aggregation, `RANK` | A scorecard from delivered purchase orders, next to each supplier's stated rates. |
+| `inventory_turnover` | Aggregation over a daily fact table | Cost of goods shipped divided by average daily inventory value, by year and category. |
+| `revenue_leakage` | `FILTER` aggregates | An order funnel (placed, completed, paid, not refunded) and the value lost to cancellations, failed payments and refunds. |
+
+### Metric definitions
+| Metric | Definition |
+|---|---|
+| Active (retention) | A customer with at least one completed order in the calendar month. |
+| Cohort | The month of a customer's first completed order. |
+| Retention % | Active customers at `months_since` divided by cohort size. Only cohorts old enough to be observed count. |
+| Observed LTV | Revenue minus COGS minus allocated shipping minus allocated refunds, summed over the customer's completed orders to 2025-12-31. It is not a forecast. |
+| RFM | Recency is days since the last completed order. Frequency is completed orders. Monetary is revenue. Each is split into quartiles with `NTILE(4)` (4 is best). `Champions`: frequency quartile 3 or 4 and recency quartile 3 or 4. `At risk`: frequency quartile 3 or 4 and recency quartile 1 or 2. `New / promising`: lower frequency and recent. `Dormant`: lower frequency and not recent. |
+| Turnover | Sum of `units_fulfilled * unit_cost` in the year divided by the average daily total inventory value. |
+| Leakage % | (Cancelled order value + failed payment value + refunds) divided by value of all placed orders. |
+
+Notes and simplifications:
+- "Active in a month" understates loyalty for customers who order every few months. The churn model later uses an inactivity window.
+- Cancelled value is potential revenue that was never recognised.
+- `inventory_daily` and `purchase_orders` still reflect demand from the quarantined orders, so turnover is slightly inconsistent with cleaned COGS.
+- Supplier rates are simulation settings, so the scorecard is a pipeline check and not a real finding.
+- Every result is reconciled against an independent pandas calculation in `tests/test_sql_analytics_2.py`.

@@ -36,3 +36,30 @@ def run_query(engine: Engine, name: str) -> pd.DataFrame:
     sql = load_query(name)
     with engine.connect() as conn:
         return pd.read_sql_query(sql, conn)
+
+def retention_curve(cohorts: pd.DataFrame, offsets=(0, 1, 2, 3, 6, 9, 12)) -> pd.DataFrame:
+    """Retention by months since first order, using only cohorts old enough to be observed.
+
+    Input is the cohort_retention query result. The last observed month is the maximum of
+    cohort month plus months since first order.
+    """
+    c = cohorts.copy()
+    month = pd.to_datetime(c["cohort_month"])
+    c["cohort_idx"] = month.dt.year * 12 + month.dt.month
+    last_idx = int((c["cohort_idx"] + c["months_since"].astype(int)).max())
+    sizes = c.drop_duplicates("cohort_month")[["cohort_idx", "cohort_size"]]
+    rows = []
+    for k in offsets:
+        eligible = sizes[sizes["cohort_idx"] + k <= last_idx]
+        total = int(eligible["cohort_size"].sum())
+        active = int(c.loc[c["months_since"] == k, "active_customers"].sum())
+        rows.append(
+            {
+                "months_since_first_order": k,
+                "cohorts_observed": len(eligible),
+                "customers_in_cohorts": total,
+                "active_customers": active,
+                "retention_pct": round(100 * active / total, 1) if total else float("nan"),
+            }
+        )
+    return pd.DataFrame(rows)

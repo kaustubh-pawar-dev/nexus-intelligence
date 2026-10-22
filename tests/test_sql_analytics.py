@@ -65,7 +65,7 @@ def lines(engine):
 
 
 def test_query_list_is_complete():
-    assert list_queries() == EXPECTED
+    assert set(EXPECTED).issubset(list_queries())
 
 
 def test_queries_are_read_only_and_use_only_the_analytics_schema():
