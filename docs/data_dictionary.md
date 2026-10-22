@@ -372,3 +372,30 @@ Notes and simplifications:
 - Six imputed signup dates differ from ground truth by about one day.
 - `purchase_orders` and `inventory_daily` are unchanged, so they still reflect the demand of the quarantined orders. They are not re-derived from the cleaned orders.
 - A constraint violation during the build rolls the whole build back.
+
+## SQL analytics (queries in `sql/analytics`)
+
+The queries run only against the `analytics` schema (the cleaned layer). `python scripts/run_sql_analytics.py` prints them. They share one CTE, `sql/analytics/_line_facts.sql`, which is expanded into each query.
+
+| Query | Technique | What it answers |
+|---|---|---|
+| `monthly_revenue` | CTE, `LAG(1)`, `LAG(12)`, a 3-row window frame | Revenue per month with month-over-month and year-over-year change and a 3-month moving average. `window_months` shows how many months were in the average. |
+| `contribution_by_category` | CTE, conditional allocation, `GROUP BY` | Contribution margin by product category. |
+| `contribution_by_segment` | same | Contribution margin by customer segment. |
+| `product_rank_in_category` | `RANK() OVER (PARTITION BY ...)` | The top 3 products in each category by contribution, with their share of the category. |
+
+### Metric definitions
+| Metric | Definition |
+|---|---|
+| Revenue | `sum(line_total)` of completed orders, after order discounts and before refunds. |
+| COGS | `sum(quantity * unit_cost)` of completed orders. |
+| Contribution margin | Revenue minus COGS minus allocated shipping cost minus allocated refunds. |
+| Contribution margin % | Contribution margin divided by revenue. |
+| Uncollected failed payments | The amount of failed payments, allocated to lines. Reported separately and never netted into revenue. |
+
+Allocation: shipping cost, refund amount and failed-payment amount belong to an order, and are spread across its lines in proportion to `line_total`. Refunds are attributed to the month and category of the original order, not the refund date, so they differ from `daily_metrics.refunds_amount` by day. Their totals match.
+
+Notes and simplifications:
+- All figures are from the cleaned layer, which holds out about 0.9% of revenue in quarantine.
+- Allocation by line value is a simplification. Real shipping cost depends on weight and volume.
+- Every query result is reconciled against an independent pandas calculation in `tests/test_sql_analytics.py`.
