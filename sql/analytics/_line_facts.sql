@@ -1,6 +1,7 @@
 -- Shared CTE: one row per completed order line, with order-level amounts allocated by line value
 line_facts AS (
     SELECT o.order_id,
+           o.customer_id,
            o.order_date,
            i.product_id,
            p.product_name,
