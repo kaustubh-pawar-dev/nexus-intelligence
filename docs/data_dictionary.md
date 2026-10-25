@@ -430,3 +430,36 @@ Notes and simplifications:
 - `inventory_daily` and `purchase_orders` still reflect demand from the quarantined orders, so turnover is slightly inconsistent with cleaned COGS.
 - Supplier rates are simulation settings, so the scorecard is a pipeline check and not a real finding.
 - Every result is reconciled against an independent pandas calculation in `tests/test_sql_analytics_2.py`.
+
+## Statistical analysis (`nexus.stats_analysis`, `scripts/run_stats.py`)
+
+`python scripts/run_stats.py` profiles the cleaned layer and runs seven hypothesis tests. Inputs come from the `analytics` schema only (customer-level data from `sql/analytics/customer_level.sql`).
+
+### Profiling
+One row per column: missing count and share, unique values and, for numeric columns, mean, standard deviation, quartiles, skew and the share of outliers by the 1.5 x IQR rule. A seasonal index divides each month's revenue by the same year's average month, which removes growth between years. Growth within a year remains.
+
+### Tests
+| Id | Question | Test | Effect size | Design label |
+|---|---|---|---|---|
+| T1 | Referral vs Paid Search LTV | Mann-Whitney U | Cliff's delta | built in |
+| T2 | Enterprise vs Consumer LTV | Mann-Whitney U | Cliff's delta | built in |
+| T3 | Refund rate, high vs low supplier-defect orders | Chi-square 2x2 | Risk ratio | built in |
+| T4 | Orders per customer, opt-in vs not | Mann-Whitney U | Cliff's delta | built in (small) |
+| T5 | Refund rate, late vs on-time deliveries | Chi-square 2x2 | Risk ratio | not built in |
+| T6 | Order value by sales channel | Kruskal-Wallis | Epsilon-squared | not built in |
+| T7 | Orders per customer by country | Kruskal-Wallis | Epsilon-squared | not built in |
+
+Design labels describe how the simulation was built. A "built in" test finding its effect confirms the pipeline. A "not built in" test finding no meaningful effect confirms that the methods can say no.
+
+### Decision rules
+| Item | Rule |
+|---|---|
+| Multiple testing | Holm-adjusted p-values across all seven tests. Significant means adjusted p below 0.05. |
+| Practical effect | Absolute Cliff's delta of at least 0.147, or risk ratio of at least 1.25 (or at most 0.8), or epsilon-squared of at least 0.01. |
+| Verdict | Significant and practically meaningful, significant but practically small, meaningful size but not significant (low power), or no evidence of an effect. |
+
+Notes and simplifications:
+- These are associations. LTV differences between channels are confounded with signup timing, because earlier customers had longer to order.
+- Customer-level values are heavily skewed, so rank tests are used and not t-tests.
+- Refunds are right-censored at the end of 2025, which affects the compared groups of T3 and T5 equally.
+- The thresholds are conventions, not laws. Different thresholds can change a verdict.
