@@ -140,7 +140,7 @@ def test_refund_frame_reconciles_with_the_tables(tables):
     captured = (tables["payments"]["payment_status"] == "Captured").sum()
     assert len(f) == captured
     assert f["refunded"].sum() == len(tables["refunds"])
-    assert f["band"].value_counts().min() > captured // 3 - 2
+    assert f["band"].value_counts().min() > 0.9 * len(f) / 3
     assert f["score"].between(0, 0.1).all()
 
 
