@@ -463,3 +463,21 @@ Notes and simplifications:
 - Customer-level values are heavily skewed, so rank tests are used and not t-tests.
 - Refunds are right-censored at the end of 2025, which affects the compared groups of T3 and T5 equally.
 - The thresholds are conventions, not laws. Different thresholds can change a verdict.
+
+## Multivariate analysis (`nexus.multivariate`, `scripts/run_multivariate.py`)
+
+Inputs are the `customer_level` query (one row per customer, cleaned layer) plus a derived `exposure_days`. All results are associations, not causal claims.
+
+| Item | Definition |
+|---|---|
+| Exposure days | Days from `max(signup_date, 2023-01-01)` to 2025-12-31, inclusive (at most 1,096). It is not time at risk, because customers who signed up before 2023 may have churned before the window. |
+| Spearman matrix | Rank correlations of orders, revenue, contribution and exposure among customers with orders. |
+| LTV model | OLS on log revenue among customers with orders. Terms: segment (baseline Consumer), channel (baseline Paid Search), opt-in and log exposure. HC3 robust standard errors. `pct_effect` is `exp(coef) - 1`. |
+| Order-rate model | Poisson regression of order counts over all customers, with an exposure offset and HC1 robust standard errors. `pct_effect` is the percentage change in the order rate. |
+| Within-segment comparison | Referral vs Paid Search contribution, Mann-Whitney within each segment (skipped below 20 customers per group), Holm-adjusted across segments. |
+| Channel by segment mix | Share of each segment in each channel among buyers, to check whether channel and segment are confounded. |
+
+Notes and simplifications:
+- The LTV model describes buyers only. It drops customers with no orders, so it says nothing about conversion.
+- A Poisson model with robust errors tolerates overdispersion but does not model churn.
+- Estimates are simulation outputs. An effect that matches a simulation setting confirms the method, not a business fact.
