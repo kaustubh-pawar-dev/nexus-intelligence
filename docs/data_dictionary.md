@@ -481,3 +481,24 @@ Notes and simplifications:
 - The LTV model describes buyers only. It drops customers with no orders, so it says nothing about conversion.
 - A Poisson model with robust errors tolerates overdispersion but does not model churn.
 - Estimates are simulation outputs. An effect that matches a simulation setting confirms the method, not a business fact.
+
+## Churn dataset and baselines (`nexus.churn`, `scripts/run_churn.py`)
+
+One row per customer per monthly cutoff, built from the `analytics` schema only.
+
+| Item | Definition |
+|---|---|
+| Cutoffs | Month starts from 2023-07-01 to 2025-07-01 (25), the months with a full 180-day history and a full 180-day outcome window inside the data. |
+| Population | Customers with at least one completed order in the 180 days before the cutoff. |
+| Label `churned` | 1 if the customer places no completed order in the 180 days from the cutoff, otherwise 0. |
+| Features | `frequency_180`, `monetary_180`, `avg_order_value`, `recency_days`, `refunds_180` (refund dated before the cutoff), `late_orders_180` (delivered before the cutoff and after the promised date), `orders_total`, `tenure_days`, `days_since_signup`, plus segment, acquisition channel and marketing opt-in. |
+| Split | Train on cutoffs up to 2024-01-01 (7). Test on cutoffs from 2024-07-01 (13). The 180-day gap means no training label overlaps the test period. |
+| Baselines | Random score, a long-recency rule, a low-frequency rule and logistic regression (log-scaled amounts, standardised). |
+| Metrics | ROC-AUC, PR-AUC (compare with prevalence), precision, recall and lift among the top 20% of scores, and the Brier score for probabilities against a constant-rate reference. |
+
+Notes and simplifications:
+- Customers appear in several cutoffs, so rows are not independent, and the same customers can be in train and test.
+- "No order in 180 days" counts low-frequency buyers who are between orders as churned. It is a behavioural definition, not a cancellation.
+- Customers who signed up before 2023 have no pre-2023 order history, so their early features understate their past activity.
+- A test rebuilds a real cutoff from data truncated at the cutoff and confirms the features do not change, which guards against leakage.
+- The data is synthetic and churn comes from a simulated lifetime, so the metrics demonstrate the pipeline and say nothing about real customers.

@@ -8,6 +8,17 @@ version = "0.1.0"
 description = "Enterprise Decision Intelligence and Predictive Analytics Platform (synthetic data)"
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = [
+    "python-dotenv==1.1.1",
+    "numpy==2.5.3",
+    "pandas==3.0.6",
+    "SQLAlchemy==2.1.4",
+    "psycopg==3.3.6",
+    "psycopg-binary==3.3.6",
+    "scipy==1.18.1",
+    "statsmodels==0.15.0",
+    "scikit-learn==1.9.1",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]
