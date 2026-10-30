@@ -165,11 +165,16 @@ with left:
             x=table["revenue"],
             y=table["category"],
             orientation="h",
+            text=table["revenue"],
+            texttemplate="%{text:.3s}",
+            textposition="outside",
+            cliponaxis=False,
             hovertemplate="%{y}<br>Revenue: %{x:,.0f}<extra></extra>",
         )
     )
     fig_rev.update_layout(
         xaxis_title="Revenue",
+        xaxis_range=[0, table["revenue"].max() * 1.2],
         yaxis={"autorange": "reversed", "title": ""},
         margin={"l": 10, "r": 10, "t": 30, "b": 10},
     )
@@ -181,11 +186,16 @@ with right:
             x=table["contribution_pct"],
             y=table["category"],
             orientation="h",
+            text=table["contribution_pct"],
+            texttemplate="%{text:.1f}%",
+            textposition="outside",
+            cliponaxis=False,
             hovertemplate="%{y}<br>Contribution margin: %{x:.1f}% of revenue<extra></extra>",
         )
     )
     fig_con.update_layout(
         xaxis_title="Contribution margin (% of revenue)",
+        xaxis_range=[0, table["contribution_pct"].max() * 1.2],
         yaxis={"autorange": "reversed", "title": ""},
         margin={"l": 10, "r": 10, "t": 30, "b": 10},
     )
@@ -201,7 +211,14 @@ with st.expander("Category details"):
                 "revenue_share_pct": "Revenue share (%)",
                 "contribution_pct": "Contribution margin (%)",
             }
-        ).round(1),
+        ).style.format(
+            {
+                "Revenue": "{:,.0f}",
+                "Contribution": "{:,.0f}",
+                "Revenue share (%)": "{:.1f}",
+                "Contribution margin (%)": "{:.1f}",
+            }
+        ),
         hide_index=True,
     )
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -56,8 +57,12 @@ for column, card in zip(st.columns(4), customer_cards(rfm, curve)):
         st.metric(card.label, card.value, help=card.help)
 
 st.subheader("Retention by cohort")
-st.caption("A cohort is the month of a customer's first completed order. Empty cells are months that lie after the end of the data.")
-matrix = retention_matrix(cohorts)
+st.caption(
+    "A cohort is the month of a customer's first completed order. Month 0 is always 100% and is left out, so the colours show the differences "
+    "between later months. Empty cells are months after the end of the data."
+)
+matrix = retention_matrix(cohorts).drop(columns=0)
+color_max = max(10.0, float(np.nanpercentile(matrix.to_numpy(), 98)))
 heatmap = go.Figure(
     go.Heatmap(
         z=matrix.to_numpy(),
@@ -65,7 +70,8 @@ heatmap = go.Figure(
         y=[f"{m:%Y-%m}" for m in matrix.index],
         colorscale="Blues",
         zmin=0,
-        zmax=100,
+        zmax=color_max,
+        hoverongaps=False,
         colorbar={"title": "Retention %"},
         hovertemplate="Cohort %{y}<br>Months since first order: %{x}<br>Retention: %{z:.1f}%<extra></extra>",
     )
@@ -132,7 +138,19 @@ with right:
         margin={"l": 10, "r": 10, "t": 50, "b": 10},
     )
     st.plotly_chart(fig_share, width="stretch")
-st.dataframe(segments.round(1), hide_index=True)
+st.dataframe(
+    segments.style.format(
+        {
+            "Customers": "{:,.0f}",
+            "Avg days since last order": "{:,.1f}",
+            "Avg orders": "{:.1f}",
+            "Avg revenue": "{:,.0f}",
+            "Revenue": "{:,.0f}",
+            "Revenue share (%)": "{:.1f}",
+        }
+    ),
+    hide_index=True,
+)
 
 st.subheader("Observed lifetime value")
 st.caption("Contribution margin per customer to 2025-12-31 (revenue minus COGS, allocated shipping and allocated refunds). It is observed to date, not a forecast.")
@@ -148,13 +166,24 @@ for column, dimension, title in ((left, "segment", "By customer segment"), (righ
             barmode="group",
             xaxis_title="",
             yaxis_title="Contribution margin per customer",
-            legend={"orientation": "h", "y": 1.15},
-            margin={"l": 10, "r": 10, "t": 70, "b": 10},
+            legend={"orientation": "h", "y": -0.2},
+            margin={"l": 10, "r": 10, "t": 50, "b": 60},
         )
         st.plotly_chart(fig_ltv, width="stretch")
+st.caption(
+    "Segment and channel overlap: a channel can look better only because it brings more Enterprise customers, "
+    "so read the channel chart together with the segment chart."
+)
 with st.expander("Lifetime value details"):
-    st.dataframe(ltv_frame(ltv, "segment").round(2), hide_index=True)
-    st.dataframe(ltv_frame(ltv, "channel").round(2), hide_index=True)
+    ltv_format = {
+        "customers": "{:,.0f}",
+        "avg_orders": "{:.2f}",
+        "avg_revenue": "{:,.0f}",
+        "avg_contribution_ltv": "{:,.0f}",
+        "median_contribution_ltv": "{:,.0f}",
+    }
+    st.dataframe(ltv_frame(ltv, "segment").style.format(ltv_format), hide_index=True)
+    st.dataframe(ltv_frame(ltv, "channel").style.format(ltv_format), hide_index=True)
 
 with st.expander("Metric definitions"):
     for label, definition in CUSTOMER_DEFINITIONS.items():
