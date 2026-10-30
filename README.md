@@ -1,6 +1,6 @@
 # NEXUS Intelligence
 
-**Enterprise Decision Intelligence & Predictive Analytics Platform** â€” a reproducible data engineering, business analytics, statistical analysis, and customer churn modeling project built entirely on synthetic enterprise data.
+**Enterprise Decision Intelligence & Predictive Analytics Platform** — a reproducible data engineering, business analytics, statistical analysis, and customer churn modeling project built entirely on synthetic enterprise data.
 
 > **Data notice:** All data is synthetic. Results demonstrate analytical methods and are not evidence of performance on real businesses or customers.
 
