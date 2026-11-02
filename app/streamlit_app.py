@@ -11,6 +11,7 @@ st.sidebar.caption("NEXUS Intelligence. All data is synthetic.")
 pages = [
     st.Page("views/executive_overview.py", title="Executive Overview", icon=":material/dashboard:", default=True),
     st.Page("views/customer_intelligence.py", title="Customer Intelligence", icon=":material/group:"),
+    st.Page("views/predictive_risk.py", title="Predictive Risk", icon=":material/warning:"),
     st.Page("views/data_quality.py", title="Data Quality", icon=":material/fact_check:"),
 ]
 st.navigation(pages).run()
