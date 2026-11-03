@@ -35,7 +35,7 @@ Enterprise data arrives messy and spread across operational systems, and decisio
 - Data Quality: row accounting, cleaning actions, injected defects against pipeline actions, and the comparison with the ground truth.
 - Every KPI query is reconciled by tests against independent queries and tables.
 
-**Testing:**  automated tests (pytest). Last verified result on 2026-11-02:  passed.
+**Testing:** 318 automated tests (pytest). Last verified result on 2026-11-03: 318 passed.
 
 ## Key results (all on synthetic data)
 
@@ -155,7 +155,7 @@ The dashboard opens at http://localhost:8501. It reads the `analytics` and `ml` 
 python -m pytest -q
 ```
 
-Last verified result on 2026-11-02: ** passed**. Most tests need the PostgreSQL layers built; the defect benchmark tests are skipped if the dirty data has not been generated.
+Last verified result on 2026-11-03: **318 passed**. Most tests need the PostgreSQL layers built; the defect benchmark tests are skipped if the dirty data has not been generated.
 
 ## Configuration
 
